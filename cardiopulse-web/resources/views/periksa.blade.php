@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CardioPulse - Heart Disease Risk Detection</title>
+    <title>CardioPulse</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <style>
-        /* Animasi Background Biru Keren */
         body {
             font-family: 'Poppins', sans-serif;
             background: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #1e3c72, #2a5298);
             background-size: 400% 400%;
             animation: gradientBG 12s ease infinite;
-            color: #ffffff; /* Teks default jadi putih untuk landing page */
+            color: #ffffff; 
             overflow-x: hidden;
         }
 
@@ -31,7 +30,6 @@
             justify-content: center;
             align-items: center;
             text-align: center;
-            /* Background transparan biar animasi bodynya tembus */
             background: transparent; 
         }
 
@@ -77,13 +75,12 @@
             min-height: 100vh;
         }
 
-        /* Card Form dibikin putih bersih biar gampang dibaca */
         .form-card {
             border-radius: 20px;
             border: none;
             box-shadow: 0 20px 50px rgba(0,0,0,0.2);
             background: #ffffff;
-            color: #2b2b2b; /* Teks di dalam form kembali gelap */
+            color: #2b2b2b; 
         }
 
         .form-control, .form-select {
@@ -107,12 +104,10 @@
         }
 
         .form-label {
-            color: #1e3c72; /* Label biru elegan */
+            color: #1e3c72; 
         }
 
-        /* Perbaikan Print PDF */
         @media print {
-            /* 1. Atur default kertas ke A4 */
             @page {
                 size: A4 portrait;
                 margin: 1cm;
@@ -122,22 +117,18 @@
                 height: auto !important;
                 background: #fff !important;
                 color: #000 !important;
-                /* Paksa warna background card keluar */
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
 
-            /* 2. SOLUSI 3 HALAMAN: Hilangkan form dan landing page sampai ke akarnya */
             #landing-section, #form-section {
                 display: none !important;
             }
 
-            /* Hilangkan efek gelap di belakang modal */
             .modal-backdrop {
                 display: none !important;
             }
 
-            /* 3. SOLUSI RAMPING: Bebaskan modal dari kurungan lebar Bootstrap */
             .modal {
                 position: static !important;
                 display: block !important;
@@ -150,7 +141,7 @@
                 max-width: 100% !important;
                 width: 100% !important;
                 margin: 0 !important;
-                transform: none !important; /* Hapus efek animasi yang kadang bikin nyangkut */
+                transform: none !important; 
             }
 
             .modal-content {
@@ -162,7 +153,6 @@
                 padding: 0 !important;
             }
 
-            /* Sembunyikan tombol-tombol saat diprint */
             .no-print {
                 display: none !important;
             }

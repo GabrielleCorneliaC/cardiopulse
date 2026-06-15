@@ -13,9 +13,8 @@ from sklearn.model_selection import train_test_split
 warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
-CORS(app) # Mengizinkan Laravel untuk mengakses API ini
+CORS(app) 
 
-# --- PROSES TRAINING MODEL (Dijalankan sekali saat server nyala) ---
 def load_data(path="heart.csv"):
     df = pd.read_csv(path)
     if 'target' not in df.columns:
@@ -41,12 +40,10 @@ def train_models(df):
         'kmeans': kmeans, 'lr': lr, 'dt': dt, 'rf': rf, 'logreg': logreg, 'col_names': col_names
     }
 
-# Memuat data dan melatih model secara global
 print("Sedang melatih model Data Mining...")
 df_global = load_data()
 models = train_models(df_global)
 
-# Untuk label KMeans berdasarkan risiko target
 df_global['cluster'] = models['kmeans'].predict(df_global[['age','sex']])
 risk_summary = df_global.groupby('cluster')['target'].mean().sort_values()
 cluster_labels = {
@@ -56,14 +53,11 @@ cluster_labels = {
 }
 print("Model selesai dilatih! Server siap menerima permintaan.")
 
-# --- ENDPOINT API ---
 @app.route('/predict', methods=['POST'])
 def predict_risk():
     try:
-        # Menangkap data JSON yang dikirim oleh Laravel
         data = request.json
         
-        # Mengekstrak nilai inputan
         age = float(data.get('age', 55))
         sex = int(data.get('sex', 1))
         cp = int(data.get('cp', 0))
@@ -102,7 +96,6 @@ def predict_risk():
         # 6. Risiko Keseluruhan
         overall = (rf_prob + log_prob + dt_prob) / 3.0
 
-        # Mengembalikan hasil sebagai JSON
         return jsonify({
             "status": "success",
             "data": {
@@ -125,5 +118,4 @@ def predict_risk():
         return jsonify({"status": "error", "message": str(e)}), 400
 
 if __name__ == '__main__':
-    # Menjalankan server di port 5000
     app.run(debug=True, port=5000)
