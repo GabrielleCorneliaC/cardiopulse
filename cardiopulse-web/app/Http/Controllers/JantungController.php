@@ -16,7 +16,7 @@ class JantungController extends Controller
     // 2. Memproses data form dan menembak ke API Flask Python
     public function proses(Request $request)
     {
-        // Validasi inputan dulu biar datanya aman dan sesuai tipe data Python
+        // Validasi inputan
         $validatedData = $request->validate([
             'age' => 'required|numeric',
             'sex' => 'required|integer',
@@ -33,17 +33,19 @@ class JantungController extends Controller
             'thal' => 'required|integer',
         ]);
 
-        // Kirim data hasil validasi ke API Flask Python (Metode POST)
-        // Pastikan server Flask kamu di port 5000 sudah menyala ya!
+        // Tembak ke API Flask Python
         $response = Http::post('http://127.0.0.1:5000/predict', $validatedData);
 
         if ($response->successful()) {
             $hasilPrediksi = $response->json()['data'];
             
-            // Lempar hasil prediksi dari Python kembali ke halaman view
-            return view('periksa', compact('hasilPrediksi', 'request'));
+            // PERUBAHAN DI SINI: Kita redirect kembali ke halaman utama (/) 
+            // membawa data input sebelumnya (withInput) dan hasil prediksinya (with)
+            return redirect()->route('jantung.index')
+                             ->withInput()
+                             ->with('hasilPrediksi', $hasilPrediksi);
         } else {
-            return back()->withErrors(['api_error' => 'Gagal terhubung ke otak AI Python. Pastikan server Python sudah menyala.']);
+            return back()->withErrors(['api_error' => 'Gagal terhubung ke otak AI Python. Pastikan server Python menyala.']);
         }
     }
 }
