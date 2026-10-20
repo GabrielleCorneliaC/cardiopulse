@@ -1,15 +1,10 @@
-import streamlit as st
+import os
 import pandas as pd
-import numpy as np
-import warnings
+import requests
+import streamlit as st
 
-from sklearn.cluster import KMeans
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-
-warnings.filterwarnings("ignore")
+# Normalisasi URL agar tidak ada double slash
+API_URL = os.getenv("CARDIOPULSE_API", "http://127.0.0.1:5000").rstrip("/")
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -18,49 +13,35 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- LOAD DATA & TRAIN MODELS ---
-@st.cache_resource
-def init_models():
+# --- PANGGIL BACKEND (app.py) ---
+def call_api(method, path, payload=None):
+    url = f"{API_URL}{path}"
     try:
-        df = pd.read_csv("heart.csv")
-    except FileNotFoundError:
-        df = pd.read_csv("../heart.csv")
+        r = requests.request(method, url, json=payload, timeout=15)
         
-    if 'target' not in df.columns:
-        if 'num' in df.columns:
-            df.rename(columns={'num': 'target'}, inplace=True)
-        elif 'disease' in df.columns:
-            df.rename(columns={'disease': 'target'}, inplace=True)
+        # Cek jika HTTP Status bukan 200/Success
+        if r.status_code != 200:
+            return {"status": "error", "message": f"HTTP {r.status_code} saat mengakses {path}"}
+            
+        body = r.json()
+        return body
+    except requests.exceptions.ConnectionError:
+        return {"status": "error", "message": "Backend belum menyala. Jalankan dulu di terminal: `python app.py`"}
+    except requests.exceptions.JSONDecodeError:
+        return {"status": "error", "message": "Respon backend bukan format JSON yang valid."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-    col_names = ['age','sex','cp','trestbps','chol','fbs','restecg','thalach','exang','oldpeak','slope','ca','thal']
-    X = df[col_names]
-    y = df['target']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10).fit(df[['age','sex']])
-    lr = LinearRegression().fit(df[['age']], df['trestbps'])
-    dt = DecisionTreeClassifier(max_depth=4, random_state=42).fit(X_train, y_train)
-    rf = RandomForestClassifier(n_estimators=100, random_state=42).fit(X_train, y_train)
-    logreg = LogisticRegression(max_iter=2000).fit(X_train, y_train)
+@st.cache_data(ttl=300)
+def get_metrics():
+    return call_api("GET", "/metrics")
 
-    df['cluster'] = kmeans.predict(df[['age','sex']])
-    risk_summary = df.groupby('cluster')['target'].mean().sort_values()
-    cluster_labels = {
-        risk_summary.index[0]: 'RISIKO RENDAH',
-        risk_summary.index[1]: 'RISIKO SEDANG',
-        risk_summary.index[2]: 'RISIKO TINGGI'
-    }
-
-    return {
-        'kmeans': kmeans, 'lr': lr, 'dt': dt, 'rf': rf, 'logreg': logreg, 
-        'col_names': col_names, 'cluster_labels': cluster_labels
-    }
-
-models = init_models()
 
 # --- HEADER ---
 st.title("🫀 Cardiopulse - Patient Health Analytics")
-st.write("Sistem Diagnosa Prediksi Risiko Penyakit Jantung berbasis Machine Learning & Data Mining.")
+st.write("Sistem Prediksi Risiko Penyakit Jantung berbasis Machine Learning & Data Mining.")
+st.caption("⚠️ Proyek edukasi, bukan alat diagnosis medis. Hasil tidak menggantikan pemeriksaan dokter.")
 st.markdown("---")
 
 # --- SIDEBAR INPUT ---
@@ -73,8 +54,8 @@ sex = 1 if sex_label == "Laki-laki" else 0
 cp_options = {0: "0: Typical Angina", 1: "1: Atypical Angina", 2: "2: Non-anginal Pain", 3: "3: Asymptomatic"}
 cp = st.sidebar.selectbox("Tipe Nyeri Dada (cp)", options=list(cp_options.keys()), format_func=lambda x: cp_options[x])
 
-trestbps = st.sidebar.number_input("Tekanan Darah Istirahat - mmHg (trestbps)", value=130, step=1)
-chol = st.sidebar.number_input("Kolesterol Serum - mg/dl (chol)", value=240, step=1)
+trestbps = st.sidebar.number_input("Tekanan Darah Istirahat - mmHg (trestbps)", min_value=50, max_value=250, value=130, step=1)
+chol = st.sidebar.number_input("Kolesterol Serum - mg/dl (chol)", min_value=100, max_value=600, value=240, step=1)
 
 fbs_label = st.sidebar.selectbox("Gula Darah Puasa > 120 mg/dl (fbs)", ["Tidak", "Ya"])
 fbs = 1 if fbs_label == "Ya" else 0
@@ -82,65 +63,111 @@ fbs = 1 if fbs_label == "Ya" else 0
 restecg_options = {0: "0: Normal", 1: "1: ST-T Wave Abnormality", 2: "2: Left Ventricular Hypertrophy"}
 restecg = st.sidebar.selectbox("Hasil EKG Istirahat (restecg)", options=list(restecg_options.keys()), format_func=lambda x: restecg_options[x])
 
-thalach = st.sidebar.number_input("Detak Jantung Maksimum (thalach)", value=150, step=1)
+thalach = st.sidebar.number_input("Detak Jantung Maksimum (thalach)", min_value=60, max_value=220, value=150, step=1)
 
 exang_label = st.sidebar.selectbox("Angina Akibat Olahraga (exang)", ["Tidak", "Ya"])
 exang = 1 if exang_label == "Ya" else 0
 
-oldpeak = st.sidebar.number_input("Depresi ST Akibat Olahraga (oldpeak)", value=1.0, step=0.1)
+oldpeak = st.sidebar.number_input("Depresi ST Akibat Olahraga (oldpeak)", min_value=0.0, max_value=7.0, value=1.0, step=0.1)
 slope = st.sidebar.selectbox("Kemiringan Segmen ST (slope)", [0, 1, 2])
 ca = st.sidebar.selectbox("Jumlah Pembuluh Darah Utama (ca)", [0, 1, 2, 3, 4])
 thal = st.sidebar.selectbox("Thalassemia (thal)", [0, 1, 2, 3])
 
-# --- PROSES PREDIKSI ---
-col_names = models['col_names']
-user_df = pd.DataFrame([[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]], columns=col_names)
+# --- PROSES PREDIKSI (Kirim ke backend) ---
+payload = {
+    "age": age, "sex": sex, "cp": cp, "trestbps": trestbps, "chol": chol,
+    "fbs": fbs, "restecg": restecg, "thalach": thalach, "exang": exang,
+    "oldpeak": oldpeak, "slope": slope, "ca": ca, "thal": thal
+}
 
-user_cluster = int(models['kmeans'].predict([[age, sex]])[0])
-risk_category = models['cluster_labels'].get(user_cluster, 'UNKNOWN')
+response_predict = call_api("POST", "/predict", payload)
 
-bp_pred = float(models['lr'].predict([[age]])[0])
+if response_predict.get("status") != "success":
+    st.error(f"Gagal memproses prediksi: {response_predict.get('message', 'Backend error')}")
+    st.stop()
 
-dt_pred = int(models['dt'].predict(user_df)[0])
-dt_prob = float(models['dt'].predict_proba(user_df)[0][1] * 100)
-dt_status = 'SAKIT JANTUNG' if dt_pred == 1 else 'SEHAT'
+res = response_predict.get("data", {})
 
-rf_prob = float(models['rf'].predict_proba(user_df)[0][1] * 100)
-log_prob = float(models['logreg'].predict_proba(user_df)[0][1] * 100)
+# Pengecekan Key secara Aman (.get)
+overall = res.get("risiko_keseluruhan", 0.0)
 
-overall = (rf_prob + log_prob + dt_prob) / 3.0
+kmeans_data = res.get("kmeans", {})
+risk_category = kmeans_data.get("kategori_risiko", "TIDAK DIKETAHUI")
 
-# --- HASIL UTAMA ---
-st.subheader("📊 Ringkasan Hasil Analisis")
-col1, col2, col3 = st.columns(3)
+# Mendukung dua nama variabel tekanan darah (lama/baru)
+bp_avg = res.get("rata_rata_tekanan_darah_usia", res.get("prediksi_tekanan_darah_normal", 120.0))
 
-with col1:
-    st.metric(label="Estimasi Risiko Keseluruhan", value=f"{overall:.1f}%")
-    st.progress(int(overall))
+dt_data = res.get("decision_tree", {})
+dt_status = dt_data.get("status", "N/A")
+dt_prob = dt_data.get("probabilitas", 0.0)
 
-with col2:
-    st.metric(label="Kategori Klaster Pasien (K-Means)", value=risk_category)
+rf_prob = res.get("random_forest_probabilitas", 0.0)
+log_prob = res.get("logistic_regression_probabilitas", 0.0)
 
-with col3:
-    st.metric(label="Prediksi Tekanan Darah Normal (Usia)", value=f"{bp_pred:.1f} mmHg")
+# Default bobot jika backend tidak mengirim bobot_model
+w_default = {"Decision Tree": 0.33, "Random Forest": 0.33, "Logistic Regression": 0.34}
+w = res.get("bobot_model", w_default)
 
-st.markdown("---")
+# --- TAB ---
+tab_pred, tab_eval = st.tabs(["📊 Prediksi", "🧪 Evaluasi Model"])
 
-# --- DETAIL MODEL ---
-st.subheader("🤖 Analisis Detail per Algoritma ML")
-col_a, col_b, col_c = st.columns(3)
+with tab_pred:
+    st.subheader("Ringkasan Hasil Analisis")
+    col1, col2, col3 = st.columns(3)
 
-with col_a:
-    st.info("**Decision Tree**")
-    st.write(f"Status: **{dt_status}**")
-    st.write(f"Probabilitas SAKIT: `{dt_prob:.2f}%`")
+    with col1:
+        st.metric(label="Estimasi Risiko Keseluruhan", value=f"{overall:.1f}%")
+        st.progress(min(max(int(overall), 0), 100))
+        st.caption("Rata-rata berbobot dari 3 model")
 
-with col_b:
-    st.warning("**Random Forest**")
-    st.write("Ensemble Classifier")
-    st.write(f"Probabilitas SAKIT: `{rf_prob:.2f}%`")
+    with col2:
+        st.metric(label="Segmen Pasien (K-Means)", value=risk_category)
+        st.caption("Segmentasi demografis (usia & jenis kelamin), bukan diagnosis klinis.")
 
-with col_c:
-    st.success("**Logistic Regression**")
-    st.write("Statistical Classification")
-    st.write(f"Probabilitas SAKIT: `{log_prob:.2f}%`")
+    with col3:
+        st.metric(label="Rata-rata Tekanan Darah Usia Ini", value=f"{bp_avg:.1f} mmHg")
+        st.caption(f"Input kamu: {trestbps} mmHg")
+
+    st.markdown("---")
+
+    st.subheader("Analisis Detail per Algoritma ML")
+    col_a, col_b, col_c = st.columns(3)
+
+    with col_a:
+        st.info("**Decision Tree**")
+        st.write(f"Status: **{dt_status}**")
+        st.write(f"Probabilitas SAKIT: `{dt_prob:.2f}%`")
+        st.caption(f"Bobot ensemble: {w.get('Decision Tree', 0.33):.0%}")
+
+    with col_b:
+        st.warning("**Random Forest**")
+        st.write("Ensemble Classifier")
+        st.write(f"Probabilitas SAKIT: `{rf_prob:.2f}%`")
+        st.caption(f"Bobot ensemble: {w.get('Random Forest', 0.33):.0%}")
+
+    with col_c:
+        st.success("**Logistic Regression**")
+        st.write("Statistical Classification")
+        st.write(f"Probabilitas SAKIT: `{log_prob:.2f}%`")
+        st.caption(f"Bobot ensemble: {w.get('Logistic Regression', 0.34):.0%}")
+
+with tab_eval:
+    m_resp = get_metrics()
+    
+    if m_resp.get("status") == "success":
+        m = m_resp.get("data", {})
+        st.subheader("Performa Model pada Data Uji")
+        st.write(f"Total data: **{m.get('jumlah_data', '-')}** | Data uji: **{m.get('jumlah_data_uji', '-')}**")
+        
+        if "metrik" in m:
+            st.dataframe(pd.DataFrame(m["metrik"]).T.round(3))
+            
+        st.caption("Untuk kasus medis, **Recall** penting: seberapa banyak pasien sakit yang berhasil terdeteksi. "
+                   "ROC-AUC (CV) lebih stabil dibanding satu kali split karena datasetnya kecil.")
+                   
+        if "proporsi_sakit_per_segmen" in m:
+            st.subheader("Proporsi Pasien Sakit per Segmen K-Means (data latih)")
+            st.bar_chart(m["proporsi_sakit_per_segmen"])
+    else:
+        st.warning("⚠️ Endpoint `/metrics` belum tersedia di backend `app.py`. "
+                   "Pastikan `app.py` sudah memiliki rute `@app.route('/metrics')` untuk melihat halaman evaluasi ini.")
